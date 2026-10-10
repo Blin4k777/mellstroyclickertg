@@ -292,6 +292,7 @@ body.runback .hp img:not(.mgt){animation:run .2s linear infinite}
 <label>Помощь чекунца (0–10)</label><div class="row"><input id="aH" placeholder="уровень" inputmode="numeric"><button class="buy" id="aHset">Задать</button></div>
 <label>Хаммам (0–1000)</label><div class="row"><input id="aM" placeholder="уровень" inputmode="numeric"><button class="buy" id="aMset">Задать</button></div>
 <label>Переключатели</label><div class="row"><button class="buy" id="aX2"></button><button class="buy" id="aMogg"></button><button class="buy" id="aHeat"></button><button class="buy" id="aMax">Всё на максимум</button><button class="buy sec" id="aReset">Сбросить мои коды</button></div>
+<label>Игрок: дать или убрать монеты</label><input id="aWho" placeholder="@ник или Telegram ID" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="row"><input id="aAmt" placeholder="сумма" inputmode="numeric"><button class="buy" id="aGive">Дать</button><button class="buy sec" id="aTake">Убрать</button></div><p id="aWhoMsg" style="font-size:12px;font-weight:700;margin:0 0 10px"></p>
 <div class="row"><button class="buy sec" id="admX">Закрыть</button></div></div></div>
 <div class="ov" id="mgM"><div class="pan adm"><h4>MOGG-меню</h4>
 <label>Режим MOGG</label><div class="row"><button class="buy" id="mgToggle"></button></div>
@@ -299,7 +300,7 @@ body.runback .hp img:not(.mgt){animation:run .2s linear infinite}
 <div class="row"><button class="buy sec" id="mgX">Закрыть</button></div></div></div>
 <div class="ov" id="lbM"><div class="pan"><h4>Таблица лидеров</h4><div class="row"><input id="lbQ" placeholder="найти игрока по нику" autocomplete="off"><button class="buy" id="lbGo">Найти</button></div><div id="lbList"></div><p id="lbMe"></p><div class="row"><button class="buy" id="lbRef">Обновить</button><button class="buy sec" id="lbX">Закрыть</button></div></div></div>
 <div class="ov" id="gfM"><div class="pan"><h4>Подарить монеты</h4><p style="margin:0 0 10px;font-weight:700">Игроку: <span id="gfWho"></span></p><input id="gfN" placeholder="сколько кликов" inputmode="numeric" autocomplete="off"><p id="gfCost" style="margin:0 0 10px;font-size:13px"></p><div class="row"><button class="buy" id="gfSend">Подарить</button><button class="buy sec" id="gfX">Отмена</button></div><p id="gfMsg" style="margin:0;font-weight:700;font-size:13px"></p></div></div>
-<div class="ov" id="gtM"><div class="pan"><h4>Тебе подарили монеты</h4><div id="gtList"></div><p id="gtTot" style="font-weight:700;margin:8px 0 10px"></p><div class="row"><button class="buy" id="gtOk">Отлично</button></div></div></div>
+<div class="ov" id="gtM"><div class="pan"><h4 id="gtH">Тебе подарили монеты</h4><div id="gtList"></div><p id="gtTot" style="font-weight:700;margin:8px 0 10px"></p><div class="row"><button class="buy" id="gtOk">Отлично</button></div></div></div>
 <div class="toast" id="toast"></div>
 <div id="max"><div class="box"><small id="maxWhat"></small><h3>ВЫ ДОСТИГЛИ МАКСИМАЛЬНОЙ СУММЫ КОТОРУЮ МОЖНО ПОЛУЧИТЬ</h3><p>нажми, чтобы продолжить</p></div></div>
 
@@ -510,10 +511,17 @@ async function gfSend(){const n=Math.floor(+$('gfN').value.replace(/[\s_,]/g,'')
 let gtSum=0;
 async function claimGifts(){if(!API_URL||!(TW&&TW.initData))return;
  try{const d=await callApi('/claim',{});if(!d.ok||!d.gifts||!d.gifts.length)return;let tot=0;
-  d.gifts.forEach(g=>{tot+=g.amount;const r=document.createElement('div');r.className='lbr';r.innerHTML='<div class="lbt"></div><div class="lbs"></div>';r.children[0].textContent=g.from;r.children[1].textContent='+'+Math.floor(g.amount).toLocaleString('ru-RU');$('gtList').appendChild(r)});
-  S.coins+=tot;gtSum+=tot;save();ui();postScore(true);
-  $('gtTot').textContent='Всего: +'+Math.floor(gtSum).toLocaleString('ru-RU')+' монет';$('gtM').classList.add('on')}catch(e){}}
+  d.gifts.forEach(g=>{tot+=g.amount;const r=document.createElement('div');r.className='lbr';r.innerHTML='<div class="lbt"></div><div class="lbs"></div>';r.children[0].textContent=g.from;r.children[1].textContent=(g.amount<0?'−':'+')+Math.abs(Math.floor(g.amount)).toLocaleString('ru-RU');$('gtList').appendChild(r)});
+  S.coins=Math.max(0,S.coins+tot);gtSum+=tot;save();ui();postScore(true);
+  $('gtTot').textContent='Итого: '+(gtSum<0?'−':'+')+Math.abs(Math.floor(gtSum)).toLocaleString('ru-RU')+' монет';$('gtH').textContent=gtSum<0?'Изменение баланса':'Тебе подарили монеты';$('gtM').classList.add('on')}catch(e){}}
 $('gtOk').onclick=()=>{$('gtM').classList.remove('on');$('gtList').innerHTML='';gtSum=0};
+async function adminAdj(mode){const who=$('aWho').value.trim(),amt=Math.floor(+$('aAmt').value.replace(/[\s_,]/g,'')),m=$('aWhoMsg');
+ if(!who||!(amt>=1)){m.textContent='Введи @ник и сумму';return}
+ m.textContent='Отправляю…';
+ try{const d=await callApi('/admin',{who,amount:amt,mode});
+  m.textContent=d.ok?((mode==='take'?'Убрано ':'Начислено ')+amt.toLocaleString('ru-RU')+' монет: '+d.to):({nouser:'Игрок не найден (он должен открыть игру после обновления)',forbidden:'Нет доступа: ты не владелец',amount:'Неверная сумма'}[d.error]||'Ошибка сервера')}
+ catch(e){m.textContent=e==='notg'||e==='noapi'?'Работает только внутри Telegram с подключённым сервером':'Нет связи с сервером'}}
+$('aGive').onclick=()=>adminAdj('give');$('aTake').onclick=()=>adminAdj('take');
 $('lbGo').onclick=lbLoad;$('lbQ').addEventListener('keydown',e=>{if(e.key==='Enter')lbLoad()});
 $('gfN').oninput=gfCost;$('gfSend').onclick=gfSend;$('gfX').onclick=()=>$('gfM').classList.remove('on');
 {const sp=new URLSearchParams(location.search),o=sp.get('open');
